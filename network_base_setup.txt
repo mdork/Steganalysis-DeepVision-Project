@@ -1,25 +1,29 @@
 #Network
-channels:      4
-start_filter:  32
-n_classes:     28
-setup:         [2,2,2]
-use_BN:        False
-dropout:       0.2
-backbone:      'plain'
-
+channels:           4
+start_filter:       32
+n_classes:          1
+channels:           [32, 64, 128, 128, 256, 256, 512]
+norm:               'group'
+depth:              2
+use_BN:             False
+dropout:            0.2
+backbone:           'plain'
+image_size:         512
 
 #Training
 n_epochs:           50
-lr:                 0.001
-perc_data:          1
-tv_split:           0.85
-seed:               1
-train_val_split:    0.80
-perc_data:          1
-bs:                 2
-verbose_idx:        200
-weight_decay:       0.00001
+lr:                 1e-3
+bs:                 50
+weight_decay:       1e-5
 step_size:          30
 gamma:              0.1
-kernels:            8
+workers:            10
 savename:           'baseline'
+train_size:         70000
+evaluation_size:    5000
+test_size:          5000
+GPU:                [9]
+
+#Paths
+network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'
+save_path:                      '/export/data/mdorkenw/results/alaska/'
