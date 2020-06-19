@@ -1,129 +1,123 @@
-import numpy as np, time, random, csv
+import numpy as np, time, random, csv, glob
 import torch, ast, pandas as pd, copy, itertools as it, os, torch.nn as nn
 from torchvision import transforms
 from PIL import Image
+import argparse
 import itertools as it, copy
 import matplotlib.pyplot as plt
+from sklearn import metrics
 
-"""============================================"""
-### Dataset for Dataloader
 class dataset(torch.utils.data.Dataset):
     def __init__(self, opt, mode='train', seed=1):
+
         self.rng = np.random.RandomState(seed)
-
-        main_path, assign_file = opt.Paths['train_data'], opt.Paths['assign_file']
-        tv_split, perc_data    = opt.Training['train_val_split'], opt.Training['perc_data']
-
-        self.assign_file = pd.read_csv(assign_file, header=0)
-        self.data_paths  = [[main_path+'/'+x+'_'+y+'.png' for y in ['red', 'yellow', 'blue','green']] for x in self.assign_file['Id']]
-        self.labels      = [ast.literal_eval(x.replace(' ',',')) for x in self.assign_file['Target']]
-        self.labels      = [[x] if not isinstance(x,tuple) else list(x) for x in self.labels]
-
-        random.seed(seed)
-        random.shuffle(self.data_paths)
-        random.seed(seed)
-        random.shuffle(self.labels)
-
-        perc_data  = int(len(self.labels)*perc_data)
-        tv_split   = int(perc_data*tv_split)
-
-        self.data_paths  = self.data_paths[:perc_data]
-        self.labels      = self.labels[:perc_data]
+        self.img_path = '/export/data/mdorkenw/data/alaska2/'
+        self.mode = mode
+        import glob
+        print()
 
         if mode=='train':
-            self.data_paths  = self.data_paths[:tv_split]
-            self.labels      = self.labels[:tv_split]
+            self.length = int(opt.Training['train_size'])
+            self.method = ['Cover', 'JUNIWARD', 'JMiPOD', 'UERD']
+            self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
+            self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
+            self.offset = 0
+        elif mode=='evaluation':
+            self.length = int(opt.Training['evaluation_size'])
+            self.method = ['Cover', 'JUNIWARD', 'JMiPOD', 'UERD']
+            self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
+            self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
+            self.offset = opt.Training['train_size']
         else:
-            self.data_paths  = self.data_paths[tv_split:]
-            self.labels      = self.labels[tv_split:]
-
+            self.length = int(opt.Training['test_size'])
+            self.method = ['Test']
+            self.data_path = glob.glob(self.img_path + "Test/*.jpg")
+            self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
+            self.offset = 0
 
         self.max_label   = opt.Network['n_classes']
-        img_mean, img_std = 0,1
 
-        # self.augment     = transforms.Compose([transforms.Rescale(256),
-        #                                        transforms.RandomAffine(degrees=180, translate=0.15, scale=(0.8,1.2), fillcolor=0),
-        #                                        transforms.ColorJitter(),
-        #                                        transforms.ToTensor(),
-        #                                        transforms.Normalize(img_mean, img_std)
-        #                                        ])
+        self.augment     = transforms.Compose([transforms.RandomHorizontalFlip(0.5),
+                                               transforms.ToTensor(),
+                                               ])
 
-        self.augment        = transforms.Compose([transforms.ToTensor()])
-        self.cost_per_class = np.ones(self.max_label)
-
-        self.n_files = len(self.labels)
-
-    def get_1hot_(self, labels):
+    def get_1hot_(self, label):
         hot1 = np.zeros(self.max_label)
-        hot1[labels] = 1
+        hot1[label] = 1
         return hot1
 
-    def load_and_augment_(self, data_paths):
-        return torch.cat([self.augment(Image.open(data_path)) for data_path in data_paths], dim=0)
+    def load_and_augment_(self, data_path):
+        return self.augment(Image.open(data_path))
 
     def __getitem__(self, idx):
-        image = self.load_and_augment_(self.data_paths[idx])
-        label = self.get_1hot_(self.labels[idx])
-        return {'Image':image, 'label':label}
+        if self.max_label == 1 or self.mode == evaluation:
+            mode = np.random.choice([0, 1, 2, 3], p=[0.5,0.5/3, 0.5/3,0.5/3])
+        else:
+            mode = np.random.randint(0, len(self.method))
+        image = self.load_and_augment_(self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg")
+        # label = self.get_1hot_(mode)
+        label = torch.tensor([mode])
+        if self.max_label == 1:
+            label[label>1] = 1
+        return {'image':image, 'label':label}
 
     def __len__(self):
-        return self.n_files
+        return self.length
 
-
-
-"""======================================================="""
 ### Function to extract setup info from text file ###
-def extract_setup_info(opt):
-    baseline_setup = pd.read_table(opt.Paths['network_base_setup_file'], header=None)
+def extract_setup_info(config_file):
+    baseline_setup = pd.read_csv(config_file, sep='\t', header=None)
     baseline_setup = [x for x in baseline_setup[0] if '=' not in x]
-    sub_setups     = [x.split('#')[-1] for x in np.array(baseline_setup) if '#' in x]
-    vals           = [x for x in np.array(baseline_setup)]
-    set_idxs       = [i for i,x in enumerate(np.array(baseline_setup)) if '#' in x]+[len(vals)]
+    sub_setups = [x.split('#')[-1] for x in np.array(baseline_setup) if '#' in x]
+    vals = [x for x in np.array(baseline_setup)]
+    set_idxs = [i for i, x in enumerate(np.array(baseline_setup)) if '#' in x] + [len(vals)]
+
     settings = {}
-    for i in range(len(set_idxs)-1):
-        settings[sub_setups[i]] = [[y.replace(" ","") for y in x.split(':')] for x in vals[set_idxs[i]+1:set_idxs[i+1]]]
+    for i in range(len(set_idxs) - 1):
+        settings[sub_setups[i]] = [[y.replace(" ", "") for y in x.split(':')] for x in
+                                   vals[set_idxs[i] + 1:set_idxs[i + 1]]]
 
-    d_opt = vars(opt)
+    # d_opt = vars(opt)
+    d_opt = {}
     for key in settings.keys():
-        d_opt[key] = {subkey:ast.literal_eval(x) for subkey,x in settings[key]}
+        d_opt[key] = {subkey: ast.literal_eval(x) for subkey, x in settings[key]}
 
-    if opt.Paths['network_variation_setup_file'] == '':
+    opt = argparse.Namespace(**d_opt)
+    if d_opt['Paths']['network_variation_setup_file'] == '':
         return [opt]
 
-
-    variation_setup = pd.read_table(opt.Paths['network_variation_setup_file'], header=None)
+    variation_setup = pd.read_csv(d_opt['Paths']['network_variation_setup_file'], sep='\t', header=None)
     variation_setup = [x for x in variation_setup[0] if '=' not in x]
-    sub_setups      = [x.split('#')[-1] for x in np.array(variation_setup) if '#' in x]
-    vals            = [x for x in np.array(variation_setup)]
-    set_idxs        = [i for i,x in enumerate(np.array(variation_setup)) if '#' in x]+[len(vals)]
+    sub_setups = [x.split('#')[-1] for x in np.array(variation_setup) if '#' in x]
+    vals = [x for x in np.array(variation_setup)]
+    set_idxs = [i for i, x in enumerate(np.array(variation_setup)) if '#' in x] + [len(vals)]
     settings = {}
-    for i in range(len(set_idxs)-1):
+    for i in range(len(set_idxs) - 1):
         settings[sub_setups[i]] = []
-        for x in vals[set_idxs[i]+1:set_idxs[i+1]]:
+        for x in vals[set_idxs[i] + 1:set_idxs[i + 1]]:
             y = x.split(':')
-            settings[sub_setups[i]].append([[y[0].replace(" ","")], ast.literal_eval(y[1].replace(" ",""))])
-        settings
+            settings[sub_setups[i]].append([[y[0].replace(" ", "")], ast.literal_eval(y[1].replace(" ", ""))])
+        # settings
 
     all_c = []
     for key in settings.keys():
         sub_c = []
         for s_i in range(len(settings[key])):
-            sub_c.append([[key]+list(x) for x in list(it.product(*settings[key][s_i]))])
+            sub_c.append([[key] + list(x) for x in list(it.product(*settings[key][s_i]))])
         all_c.extend(sub_c)
-
 
     setup_collection = []
     training_options = list(it.product(*all_c))
     for variation in training_options:
-        base_opt   = copy.deepcopy(opt)
+        base_opt = copy.deepcopy(opt)
         base_d_opt = vars(base_opt)
-        for i,sub_variation in enumerate(variation):
+        # WHY??? you never use base_d_opt again
+        for i, sub_variation in enumerate(variation):
             base_d_opt[sub_variation[0]][sub_variation[1]] = sub_variation[2]
             base_d_opt['iter_idx'] = i
         setup_collection.append(base_opt)
 
-    return setup_collection
-
+        return setup_collection
 
 """==================================================="""
 def gimme_save_string(opt):
@@ -155,98 +149,105 @@ class CSVlogger():
 
 
 """===================================================="""
-def progress_plotter(x, train_loss, train_metric, val_loss, val_metric, savename='result.svg', title='No title'):
+def progress_plotter(x, train_loss, train_metric, labels, savename='result.svg'):
     plt.style.use('ggplot')
-    f,ax = plt.subplots(1)
-    ax.plot(x, train_loss,'b--',label='Training Loss')
-    ax.plot(x, val_loss,'r--',label='Validation Loss')
+    f, ax = plt.subplots(1)
+    ax.plot(x, train_loss, 'b--', label=labels[0])
 
     axt = ax.twinx()
-    axt.plot(x, train_metric, 'b', label='Training Dice')
-    axt.plot(x, val_metric, 'r', label='Validation Dice')
+    axt.plot(x, train_metric, 'b', label=labels[1])
 
-    ax.set_title(title)
     ax.legend(loc=0)
     axt.legend(loc=2)
 
     f.suptitle('Loss and Evaluation Metric Progression')
-    f.set_size_inches(15,10)
+    f.set_size_inches(15, 10)
     f.savefig(savename)
     plt.close()
 
 
+def summary_plots(loss_dic_train, loss_dic_test, epoch, save_path):
+    progress_plotter(np.arange(0, len(loss_dic_train["Loss"])), loss_dic_train["Loss"], loss_dic_test["AUC"],
+                     ["Loss Train", "AUC Test"], save_path + '/Loss_AUC.png')
 
-"""===================================================="""
+
+"""################################################"""
+class loss_tracking():
+    def __init__(self, names):
+        super(loss_tracking, self).__init__()
+        self.loss_dic = names
+        self.hist = {x: np.array([]) for x in self.loss_dic}
+        self.keys = [*self.hist]
+
+    def reset(self):
+        self.dic = {x: np.array([]) for x in self.loss_dic}
+
+    def append(self, losses):
+        assert (len(self.keys)-1 == len(losses))
+        for idx in range(len(losses)):
+            self.dic[self.keys[idx]] = np.append(self.dic[self.keys[idx]], losses[idx])
+
+    def append_auc(self, auc):
+        self.dic['AUC'] = np.append(self.dic['AUC'], auc)
+
+    def get_mean(self):
+        self.mean = []
+        for idx in range(len(self.keys)):
+            self.mean.append(np.mean(self.dic[self.keys[idx]]))
+        self.history()
+
+    def history(self):
+        for idx in range(len(self.keys)):
+            self.hist[self.keys[idx]] = np.append(self.hist[self.keys[idx]], self.mean[idx])
+
+    def get_current_mean(self):
+        return self.mean
+
+    def get_hist(self):
+        return self.hist
+
+
 class Base_Loss(nn.Module):
-    def __init__(self, weights=None):
+    def __init__(self, dic):
         super(Base_Loss, self).__init__()
-        self.weights = weights.type(torch.cuda.FloatTensor) if weights is not None else None
-        self.loss    = nn.BCELoss(weight=self.weights)
-        # self.loss    = nn.CrossEntropyLoss(weight=self.weights, size_average=False, reduce=False)
+        self.n_classes = dic['n_classes']
+        if self.n_classes > 1:
+            self.loss    = nn.CrossEntropyLoss()
+        else:
+            self.loss    = nn.BCEWithLogitsLoss()
 
     def forward(self, inp, target):
-        return self.loss(inp, target)
+        if self.n_classes > 1:
+            return self.loss(inp, target.long().reshape(-1))
+        else:
+            return self.loss(inp.reshape(-1), target.reshape(-1))
 
 
-"""==================================================="""
-def gimme_params(model):
-    model_parameters = filter(lambda p: p.requires_grad, model.parameters())
-    params = sum([np.prod(p.size()) for p in model_parameters])
-    return params
+def auc(y_true, y_valid):
+    tpr_thresholds = [0.0, 0.4, 1.0]
+    weights = [2, 1]
 
+    fpr, tpr, thresholds = metrics.roc_curve(y_true, y_valid, pos_label=1)
 
-"""==================================================="""
-def save_graph(network_output, savepath, savename):
-    from graphviz import Digraph
-    def make_dot(var, savename, params=None):
-        """ Produces Graphviz representation of PyTorch autograd graph
-        Blue nodes are the Variables that require grad, orange are Tensors
-        saved for backward in torch.autograd.Function
-        Args:
-            var: output Variable
-            params: dict of (name, Variable) to add names to node that
-                require grad (TODO: make optional)
-        """
-        if params is not None:
-            assert all(isinstance(p, Variable) for p in params.values())
-            param_map = {id(v): k for k, v in params.items()}
+    # size of subsets
+    areas = np.array(tpr_thresholds[1:]) - np.array(tpr_thresholds[:-1])
 
-        node_attr = dict(style='filled',shape='box',align='left',fontsize='12',ranksep='0.1',height='0.2')
-        dot = Digraph(node_attr=node_attr, graph_attr=dict(size="12,12"))
-        seen = set()
+    # The total area is normalized by the sum of weights such that the final weighted AUC is between 0 and 1.
+    normalization = np.dot(areas, weights)
 
-        def size_to_str(size):
-            return '('+(', ').join(['%d' % v for v in size])+')'
+    competition_metric = 0
+    for idx, weight in enumerate(weights):
+        y_min = tpr_thresholds[idx]
+        y_max = tpr_thresholds[idx + 1]
+        mask = (y_min < tpr) & (tpr < y_max)
 
-        def add_nodes(var):
-            if var not in seen:
-                if torch.is_tensor(var):
-                    dot.node(str(id(var)), size_to_str(var.size()), fillcolor='orange')
-                elif hasattr(var, 'variable'):
-                    u = var.variable
-                    name = param_map[id(u)] if params is not None else ''
-                    node_name = '%s\n %s' % (name, size_to_str(u.size()))
-                    dot.node(str(id(var)), node_name, fillcolor='lightblue')
-                else:
-                    dot.node(str(id(var)), str(type(var).__name__))
-                seen.add(var)
-                if hasattr(var, 'next_functions'):
-                    for u in var.next_functions:
-                        if u[0] is not None:
-                            dot.edge(str(id(u[0])), str(id(var)))
-                            add_nodes(u[0])
-                if hasattr(var, 'saved_tensors'):
-                    for t in var.saved_tensors:
-                        dot.edge(str(id(t)), str(id(var)))
-                        add_nodes(t)
+        x_padding = np.linspace(fpr[mask][-1], 1, 100)
 
-        add_nodes(var.grad_fn)
-        print("Saving...")
-        dot.save(savename)
-        return dot
+        x = np.concatenate([fpr[mask], x_padding])
+        y = np.concatenate([tpr[mask], [y_max] * len(x_padding)])
+        y = y - y_min  # normalize such that curve starts at y=0
+        score = metrics.auc(x, y)
+        submetric = score * weight
+        competition_metric += submetric
 
-    if not os.path.exists(savepath+"/Network_Graphs"):
-        os.makedirs(savepath+"/Network_Graphs")
-    viz_graph = make_dot(network_output, savepath+"/Network_Graphs"+"/"+savename)
-    print("Creating pdf...")
-    viz_graph.view()
+    return competition_metric / normalization
