@@ -1,5 +1,5 @@
-import numpy as np, os, sys, pandas as pd, imp, ast, time, gc
-import torch, torch.nn as nn, pickle as pkl
+import numpy as np, os, sys, pandas as pd, ast, time, gc
+import torch, torch.nn as nn, pickle as pkl, random
 from PIL import Image
 from torchvision import transforms
 from tqdm import tqdm, trange
@@ -8,6 +8,15 @@ import auxiliaries as aux
 import argparse
 from distutils.dir_util import copy_tree
 from datetime import datetime
+
+seed = 42
+print(f'setting everything to seed {seed}')
+random.seed(seed)
+os.environ['PYTHONHASHSEED'] = str(seed)
+np.random.seed(seed)
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.backends.cudnn.deterministic = True
 
 
 def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
@@ -21,27 +30,30 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
 
     for image_idx, file_dict in enumerate(data_iter):
 
+        optimizer.zero_grad()
         image = file_dict["image"].type(torch.FloatTensor).cuda()
         label = file_dict["label"].type(torch.FloatTensor).cuda()
 
         logits = network(image)
-        loss      = loss_func(logits, label)
+        loss   = loss_func(logits, label)
 
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
         prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
         acc = (np.round(prediction==label.cpu().data.numpy())).mean()
 
-        logits = nn.Sigmoid()(logits).detach().cpu() #TODO Use sigmoid?!
+        logits = logits.detach().cpu()
         logits_collect.append(logits)
         labels_collect.append(label.cpu().numpy())
 
         loss_dic = [loss.item(), acc]
         loss_track.append(loss_dic)
+
         if image_idx%20==0:
-            inp_string = 'Epoch {} || Loss: {} | Acc: {}'.format(epoch, np.round(loss.item(), 2), acc)
+            loss_mean, acc_mean, *_ = loss_track.get_iteration_mean()
+            inp_string = 'Epoch {} || Loss: {} | Acc: {}'.format(epoch, np.round(loss_mean, 2),
+                                                                 np.round(acc_mean, 3))
             data_iter.set_description(inp_string)
 
     logits = torch.cat(logits_collect, dim=0)
@@ -62,7 +74,7 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
     loss_track.get_mean()
 
 
-def validator(network, epoch, data_loader, loss_track, loss_func):
+def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
 
     _ = network.eval()
     loss_track.reset()
@@ -84,8 +96,7 @@ def validator(network, epoch, data_loader, loss_track, loss_func):
             prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
             acc = (np.round(prediction==label.cpu().data.numpy())).mean()
 
-            logits = nn.Sigmoid()(logits).detach().cpu()  # TODO Use sigmoid?!
-            logits_collect.append(logits)
+            logits_collect.append(logits.detach().cpu())
             labels_collect.append(label.cpu().numpy())
 
             loss_dic = [loss.item(), acc]
@@ -111,25 +122,21 @@ def validator(network, epoch, data_loader, loss_track, loss_func):
     ### Empty GPU cache
     torch.cuda.empty_cache()
     loss_track.get_mean()
+    scheduler.step(loss_track.get_current_mean()[0])
 
 
-"""=================================================================================="""
-"""=================================================================================="""
 def main(opt):
     """============================================"""
     ### Load Network
-    imp.reload(net)
-    network = net.Network(opt.Network)
+    network = net.Net(opt.Network).cuda()
     print("Number of parameters in model", sum(p.numel() for p in network.parameters()))
-    _ = network.cuda()
 
-    ### Set Optimizer
+    ###### Define Optimizer ######
     loss_func   = aux.Base_Loss(opt.Network)
-    optimizer   = torch.optim.Adam(network.parameters(), lr=opt.Training['lr'], weight_decay=opt.Training['weight_decay'])
-    scheduler   = torch.optim.lr_scheduler.StepLR(optimizer, step_size=opt.Training['step_size'], gamma=opt.Training['gamma'])
+    optimizer   = torch.optim.AdamW(network.parameters(), lr=opt.Training['lr'], weight_decay=opt.Training['weight_decay'])
+    scheduler   = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1, min_lr=1e-7)
 
-    """============================================"""
-    ### Set Dataloader
+    ###### Create Dataloaders ######
     train_dataset     = aux.dataset(opt, mode='train')
     train_data_loader = torch.utils.data.DataLoader(train_dataset, num_workers=opt.Training['workers'],
                                                     batch_size=opt.Training['bs'], shuffle=True)
@@ -137,7 +144,7 @@ def main(opt):
     val_data_loader   = torch.utils.data.DataLoader(val_dataset, num_workers=opt.Training['workers'],
                                                     batch_size=opt.Training['bs'], shuffle=False)
 
-    """======================Set Logging Files======================"""
+    ###### Set Logging Files ######
     dt = datetime.now()
     dt = '{}-{}-{}-{}-{}'.format(dt.year, dt.month, dt.day, dt.hour, dt.minute)
     opt.Training['name'] = 'Model' + '_Date-' + dt  # +str(opt.iter_idx)+
@@ -169,8 +176,6 @@ def main(opt):
 
     ### Copy Code !!
     copy_tree('./', save_path + '/code/')
-
-    #Generate save string
     save_str = aux.gimme_save_string(opt)
 
     ### Save rudimentary info parameters to text-file and pkl.
@@ -194,13 +199,12 @@ def main(opt):
         epoch_time = time.time()
 
         ###### Training ########
-        epoch_iterator.set_description("Training with lr={}".format(np.round(scheduler.get_lr(), 6)))
+        epoch_iterator.set_description("Training with lr={}".format(np.round([group['lr'] for group in optimizer.param_groups][0], 6)))
         trainer(network, epoch, train_data_loader, loss_track_train, optimizer, loss_func)
 
         ###### Validation #########
         epoch_iterator.set_description('Validating...')
-        validator(network, epoch, val_data_loader, loss_track_test, loss_func)
-
+        validator(network, epoch, val_data_loader, loss_track_test, loss_func, scheduler)
 
         ###### SAVE CHECKPOINTS ########
         save_dict = {'epoch': epoch+1, 'state_dict': network.state_dict(),
@@ -217,8 +221,7 @@ def main(opt):
         full_log_test.write([epoch, time.time() - epoch_time, [group['lr'] for group in optimizer.param_groups][0], *loss_track_test.get_current_mean()])
 
         ###### Generating Summary Plots #######
-        aux.summary_plots(loss_track_train.get_hist(), loss_track_test.get_hist(), epoch, save_summary)
-        scheduler.step()
+        # aux.summary_plots(loss_track_train.get_hist(), loss_track_test.get_hist(), epoch, save_summary)
         _ = gc.collect()
 
 
