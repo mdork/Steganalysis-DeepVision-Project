@@ -7,14 +7,14 @@ import itertools as it, copy
 import matplotlib.pyplot as plt
 from sklearn import metrics
 
+
 class dataset(torch.utils.data.Dataset):
     def __init__(self, opt, mode='train', seed=1):
 
         self.rng = np.random.RandomState(seed)
         self.img_path = '/export/data/mdorkenw/data/alaska2/'
         self.mode = mode
-        import glob
-        print()
+        self.jpeg_comp = np.load(self.img_path + 'JPEG_compression.npy')
 
         if mode=='train':
             self.length = int(opt.Training['train_size'])
@@ -35,39 +35,58 @@ class dataset(torch.utils.data.Dataset):
             self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
             self.offset = 0
 
-        self.max_label   = opt.Network['n_classes']
+        self.n_classes = opt.Network['n_classes']
 
-        self.augment     = transforms.Compose([transforms.RandomHorizontalFlip(0.5),
-                                               transforms.ToTensor(),
-                                               ])
+        self.augment_train = transforms.Compose([
+             transforms.RandomVerticalFlip(p=0.5),
+             transforms.RandomHorizontalFlip(p=0.5),
+             # transforms.RandomCrop(224),
+             transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
+
+        self.augment_test  = transforms.Compose([
+            # transforms.RandomCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+        ])
 
     def get_1hot_(self, label):
-        hot1 = np.zeros(self.max_label)
+        hot1 = np.zeros(self.n_classes)
         hot1[label] = 1
         return hot1
 
     def load_and_augment_(self, data_path):
-        return self.augment(Image.open(data_path))
+        if self.mode=='test' or self.mode=='evaluation':
+            return self.augment_train(Image.open(data_path))
+        else:
+            return self.augment_test(Image.open(data_path))
 
     def __getitem__(self, idx):
-        if self.max_label == 1 or self.mode == evaluation:
-            mode = np.random.choice([0, 1, 2, 3], p=[0.5,0.5/3, 0.5/3,0.5/3])
+        if self.n_classes == 1 or self.mode == 'evaluation':
+            mode = np.random.choice([0, 1, 2, 3], p=[0.5, 0.5/3, 0.5/3, 0.5/3])
         else:
             mode = np.random.randint(0, len(self.method))
         image = self.load_and_augment_(self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg")
         # label = self.get_1hot_(mode)
-        label = torch.tensor([mode])
-        if self.max_label == 1:
-            label[label>1] = 1
-        return {'image':image, 'label':label}
+        compression = self.jpeg_comp[idx]
+        if self.n_classes == 4:
+            label = torch.tensor([mode])
+        elif self.n_classes == 12:
+            label = torch.tensor([mode*3 + compression])
+
+        if self.n_classes == 1:
+            label[label > 1] = 1
+        return {'image': image, 'label': label}
 
     def __len__(self):
         return self.length
 
+
 ### Function to extract setup info from text file ###
 def extract_setup_info(config_file):
     baseline_setup = pd.read_csv(config_file, sep='\t', header=None)
-    baseline_setup = [x for x in baseline_setup[0] if '=' not in x]
+    baseline_setup = [x for x in baseline_setup[0] if '=' not inct x]
     sub_setups = [x.split('#')[-1] for x in np.array(baseline_setup) if '#' in x]
     vals = [x for x in np.array(baseline_setup)]
     set_idxs = [i for i, x in enumerate(np.array(baseline_setup)) if '#' in x] + [len(vals)]
@@ -119,7 +138,7 @@ def extract_setup_info(config_file):
 
         return setup_collection
 
-"""==================================================="""
+
 def gimme_save_string(opt):
     varx = vars(opt)
     base_str = ''
@@ -134,7 +153,6 @@ def gimme_save_string(opt):
     return base_str
 
 
-"""==================================================="""
 class CSVlogger():
     def __init__(self, logname, header_names):
         self.header_names = header_names
@@ -142,13 +160,13 @@ class CSVlogger():
         with open(logname,"a") as csv_file:
             writer = csv.writer(csv_file, delimiter=",")
             writer.writerow(header_names)
+
     def write(self, inputs):
         with open(self.logname,"a") as csv_file:
             writer = csv.writer(csv_file, delimiter=",")
             writer.writerow(inputs)
 
 
-"""===================================================="""
 def progress_plotter(x, train_loss, train_metric, labels, savename='result.svg'):
     plt.style.use('ggplot')
     f, ax = plt.subplots(1)
@@ -171,7 +189,6 @@ def summary_plots(loss_dic_train, loss_dic_test, epoch, save_path):
                      ["Loss Train", "AUC Test"], save_path + '/Loss_AUC.png')
 
 
-"""################################################"""
 class loss_tracking():
     def __init__(self, names):
         super(loss_tracking, self).__init__()
@@ -189,6 +206,15 @@ class loss_tracking():
 
     def append_auc(self, auc):
         self.dic['AUC'] = np.append(self.dic['AUC'], auc)
+
+    def get_iteration_mean(self):
+        mean = []
+        for idx in range(len(self.keys)-1):
+            if len(self.dic[self.keys[idx]]) < 100:
+                mean.append(np.mean(self.dic[self.keys[idx]]))
+            else:
+                mean.append(np.mean(self.dic[self.keys[idx]][-100:]))
+        return mean
 
     def get_mean(self):
         self.mean = []
@@ -251,3 +277,29 @@ def auc(y_true, y_valid):
         competition_metric += submetric
 
     return competition_metric / normalization
+
+
+## Alterantive loss fom kaggle
+class LabelSmoothing(nn.Module):
+    def __init__(self, smoothing=0.05):
+        super(LabelSmoothing, self).__init__()
+        self.confidence = 1.0 - smoothing
+        self.smoothing = smoothing
+
+    def forward(self, x, target):
+        if self.training:
+            x = x.float()
+            target = target.float()
+            logprobs = torch.nn.functional.log_softmax(x, dim=-1)
+
+            nll_loss = -logprobs * target
+            nll_loss = nll_loss.sum(-1)
+
+            smooth_loss = -logprobs.mean(dim=-1)
+
+            loss = self.confidence * nll_loss + self.smoothing * smooth_loss
+
+            return loss.mean()
+        else:
+            return torch.nn.functional.cross_entropy(x, target)
+
