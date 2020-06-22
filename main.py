@@ -58,9 +58,12 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
 
     logits = torch.cat(logits_collect, dim=0)
     label = np.concatenate(labels_collect, axis=0)
-    if logits.shape[1] > 1:
+    if logits.shape[1] ==4:
         logits = nn.Softmax(dim=1)(logits).numpy()
         pred  = np.sum(logits[:, 1:], axis=1)
+    elif logits.shape[1] == 12:
+        logits = nn.Softmax(dim=1)(logits).numpy()
+        pred = np.sum(logits[:, 3:], axis=1)
     else:
         pred = logits.numpy().reshape(-1)
 
@@ -108,9 +111,13 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
 
     logits = torch.cat(logits_collect, dim=0)
     label = np.concatenate(labels_collect, axis=0)
-    if logits.shape[1] > 1:
+
+    if logits.shape[1] ==4:
         logits = nn.Softmax(dim=1)(logits).numpy()
         pred  = np.sum(logits[:, 1:], axis=1)
+    elif logits.shape[1] == 12:
+        logits = nn.Softmax(dim=1)(logits).numpy()
+        pred = np.sum(logits[:, 3:], axis=1)
     else:
         pred = logits.numpy().reshape(-1)
 
