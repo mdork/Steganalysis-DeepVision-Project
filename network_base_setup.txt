@@ -17,7 +17,7 @@ savename:           'Efficientnet-b0_4classes_normalize'
 train_size:         70000
 evaluation_size:    5000
 test_size:          5000
-GPU:                [1]
+GPU:                [2]
 
 #Paths
 network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'

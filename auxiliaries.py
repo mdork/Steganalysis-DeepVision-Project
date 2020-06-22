@@ -68,11 +68,10 @@ class dataset(torch.utils.data.Dataset):
         else:
             mode = np.random.randint(0, len(self.method))
         image = self.load_and_augment_(self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg")
-        # label = self.get_1hot_(mode)
-        compression = self.jpeg_comp[idx]
-        if self.n_classes == 4:
-            label = torch.tensor([mode])
-        elif self.n_classes == 12:
+
+        label = torch.tensor([mode])
+        if self.n_classes == 12:
+            compression = self.jpeg_comp[idx]
             label = torch.tensor([mode*3 + compression])
 
         if self.n_classes == 1:
@@ -86,7 +85,7 @@ class dataset(torch.utils.data.Dataset):
 ### Function to extract setup info from text file ###
 def extract_setup_info(config_file):
     baseline_setup = pd.read_csv(config_file, sep='\t', header=None)
-    baseline_setup = [x for x in baseline_setup[0] if '=' not inct x]
+    baseline_setup = [x for x in baseline_setup[0] if '=' not in x]
     sub_setups = [x.split('#')[-1] for x in np.array(baseline_setup) if '#' in x]
     vals = [x for x in np.array(baseline_setup)]
     set_idxs = [i for i, x in enumerate(np.array(baseline_setup)) if '#' in x] + [len(vals)]
