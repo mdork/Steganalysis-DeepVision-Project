@@ -42,7 +42,7 @@ class dataset(torch.utils.data.Dataset):
              transforms.RandomHorizontalFlip(p=0.5),
              # transforms.RandomCrop(224),
              transforms.ToTensor(),
-            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
         self.augment_test  = transforms.Compose([
@@ -57,7 +57,7 @@ class dataset(torch.utils.data.Dataset):
         return hot1
 
     def load_and_augment_(self, data_path):
-        if self.mode=='test' or self.mode=='evaluation':
+        if self.mode=='test' or self.mode == 'evaluation':
             return self.augment_train(Image.open(data_path))
         else:
             return self.augment_test(Image.open(data_path))
@@ -199,20 +199,23 @@ class loss_tracking():
         self.dic = {x: np.array([]) for x in self.loss_dic}
 
     def append(self, losses):
-        assert (len(self.keys)-1 == len(losses))
+        assert (len(self.keys)-2 == len(losses))
         for idx in range(len(losses)):
             self.dic[self.keys[idx]] = np.append(self.dic[self.keys[idx]], losses[idx])
 
     def append_auc(self, auc):
         self.dic['AUC'] = np.append(self.dic['AUC'], auc)
 
-    def get_iteration_mean(self):
+    def append_binary_acc(self, acc):
+        self.dic['binary_acc'] = np.append(self.dic['binary_acc'], acc)
+
+    def get_iteration_mean(self, num=10):
         mean = []
-        for idx in range(len(self.keys)-1):
-            if len(self.dic[self.keys[idx]]) < 100:
+        for idx in range(len(self.keys)-2):
+            if len(self.dic[self.keys[idx]]) < num:
                 mean.append(np.mean(self.dic[self.keys[idx]]))
             else:
-                mean.append(np.mean(self.dic[self.keys[idx]][-100:]))
+                mean.append(np.mean(self.dic[self.keys[idx]][-num:]))
         return mean
 
     def get_mean(self):

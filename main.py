@@ -50,7 +50,7 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
         loss_dic = [loss.item(), acc]
         loss_track.append(loss_dic)
 
-        if image_idx%20==0:
+        if image_idx%20 == 0:
             loss_mean, acc_mean, *_ = loss_track.get_iteration_mean()
             inp_string = 'Epoch {} || Loss: {} | Acc: {}'.format(epoch, np.round(loss_mean, 2),
                                                                  np.round(acc_mean, 3))
@@ -58,7 +58,7 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
 
     logits = torch.cat(logits_collect, dim=0)
     label = np.concatenate(labels_collect, axis=0)
-    if logits.shape[1] ==4:
+    if logits.shape[1] == 4:
         logits = nn.Softmax(dim=1)(logits).numpy()
         pred  = np.sum(logits[:, 1:], axis=1)
     elif logits.shape[1] == 12:
@@ -67,10 +67,14 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
     else:
         pred = logits.numpy().reshape(-1)
 
-    label[label>1] = 1
+    label[label > 1] = 1
     label = label.reshape(-1)
     auc = aux.auc(label.astype(int), pred)
     loss_track.append_auc(auc)
+    pred[pred > 0.5] = 1
+    pred[pred <= 0.5] = 0
+    acc = (np.round(pred == label)).mean()
+    loss_track.append_binary_acc(acc)
 
     ### Empty GPU cache
     torch.cuda.empty_cache()
@@ -125,6 +129,10 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
     label = label.reshape(-1)
     auc = aux.auc(label.astype(int), pred)
     loss_track.append_auc(auc)
+    pred[pred > 0.5] = 1
+    pred[pred <= 0.5] = 0
+    acc = (np.round(pred == label)).mean()
+    loss_track.append_binary_acc(acc)
 
     ### Empty GPU cache
     torch.cuda.empty_cache()
@@ -190,7 +198,7 @@ def main(opt):
         f.write(save_str)
     pkl.dump(opt, open(opt.Paths['save_path'] + "/hypa.pkl", "wb"))
 
-    logging_keys = ["Loss", "ACC", "AUC"]
+    logging_keys = ["Loss", "ACC", "binary_acc", "AUC"]
 
     loss_track_train = aux.loss_tracking(logging_keys)
     loss_track_test = aux.loss_tracking(logging_keys)
