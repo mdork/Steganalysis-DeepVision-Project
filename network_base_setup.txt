@@ -1,16 +1,17 @@
 #Network
 n_classes:          4
 image_size:         512
+attention_mask:     True
+input_domain:       'RGB'
 
 #Training
-attention_mask:     True
 n_epochs:           50
 lr:                 1e-3
 bs:                 18
 weight_decay:       0.01
 step_size:          30
-workers:            0
-savename:           'Efficientnet-b4_4classes_HIGHPASS'
+workers:            20
+savename:           'Efficientnet-b0_4classes_HIGHPASS'
 train_size:         70000
 evaluation_size:    5000
 test_size:          5000
