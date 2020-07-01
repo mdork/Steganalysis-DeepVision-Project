@@ -1,22 +1,20 @@
 #Network
-n_classes:          1
-channels:           [32, 64, 128, 128, 256, 256, 512]
-norm:               'group'
-depth:              1
+n_classes:          4
 image_size:         512
 
 #Training
+attention_mask:     True
 n_epochs:           50
 lr:                 1e-3
 bs:                 18
 weight_decay:       0.01
 step_size:          30
-workers:            20
-savename:           'Efficientnet-b0_2classes'
+workers:            0
+savename:           'Efficientnet-b4_4classes_HIGHPASS'
 train_size:         70000
 evaluation_size:    5000
 test_size:          5000
-GPU:                [3]
+GPU:                [7]
 
 #Paths
 network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'
