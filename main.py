@@ -33,8 +33,9 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
         optimizer.zero_grad()
         image = file_dict["image"].type(torch.FloatTensor).cuda()
         label = file_dict["label"].type(torch.FloatTensor).cuda()
+        mask = file_dict["mask"].type(torch.FloatTensor).cuda()
 
-        logits = network(image)
+        logits = network(image, mask)
         loss   = loss_func(logits, label)
 
         loss.backward()
@@ -58,12 +59,9 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
 
     logits = torch.cat(logits_collect, dim=0)
     label = np.concatenate(labels_collect, axis=0)
-    if logits.shape[1] == 4:
-        logits = nn.Softmax(dim=1)(logits).numpy()
-        pred  = np.sum(logits[:, 1:], axis=1)
-    elif logits.shape[1] == 12:
-        logits = nn.Softmax(dim=1)(logits).numpy()
-        pred = np.sum(logits[:, 3:], axis=1)
+
+    if logits.size(1) > 1:
+        pred = 1-nn.Softmax(dim=1)(logits).numpy()[:, 0]
     else:
         pred = logits.numpy().reshape(-1)
 
@@ -96,8 +94,9 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
 
             image = file_dict["image"].type(torch.FloatTensor).cuda()
             label = file_dict["label"].type(torch.FloatTensor).cuda()
+            mask = file_dict["mask"].type(torch.FloatTensor).cuda()
 
-            logits   = network(image)
+            logits   = network(image, mask)
             loss     = loss_func(logits, label)
 
             prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
@@ -116,12 +115,8 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
     logits = torch.cat(logits_collect, dim=0)
     label = np.concatenate(labels_collect, axis=0)
 
-    if logits.shape[1] ==4:
-        logits = nn.Softmax(dim=1)(logits).numpy()
-        pred  = np.sum(logits[:, 1:], axis=1)
-    elif logits.shape[1] == 12:
-        logits = nn.Softmax(dim=1)(logits).numpy()
-        pred = np.sum(logits[:, 3:], axis=1)
+    if logits.size(1) > 1:
+        pred = 1-nn.Softmax(dim=1)(logits).numpy()[:, 0]
     else:
         pred = logits.numpy().reshape(-1)
 

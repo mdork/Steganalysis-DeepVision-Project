@@ -15,6 +15,7 @@ class dataset(torch.utils.data.Dataset):
         self.img_path = '/export/data/mdorkenw/data/alaska2/'
         self.mode = mode
         self.jpeg_comp = np.load(self.img_path + 'JPEG_compression.npy')
+        self.use_attention = opt.Training['attention_mask']
 
         if mode=='train':
             self.length = int(opt.Training['train_size'])
@@ -51,6 +52,10 @@ class dataset(torch.utils.data.Dataset):
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
+        self.high_pass_filter = torch.nn.Conv2d(1, 1, 3, 1, 1, bias=False)
+        kernel = torch.from_numpy(np.array([[0, -1 / 4, 0], [-1 / 4, 1, -1 / 4], [0, -1 / 4, 0]]))
+        self.high_pass_filter.weight = torch.nn.Parameter(kernel.unsqueeze(0).unsqueeze(0).float())
+
     def get_1hot_(self, label):
         hot1 = np.zeros(self.n_classes)
         hot1[label] = 1
@@ -67,7 +72,8 @@ class dataset(torch.utils.data.Dataset):
             mode = np.random.choice([0, 1, 2, 3], p=[0.5, 0.5/3, 0.5/3, 0.5/3])
         else:
             mode = np.random.randint(0, len(self.method))
-        image = self.load_and_augment_(self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg")
+        img_dir = self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg"
+        image = self.load_and_augment_(img_dir)
 
         label = torch.tensor([mode])
         if self.n_classes == 12:
@@ -76,7 +82,13 @@ class dataset(torch.utils.data.Dataset):
 
         if self.n_classes == 1:
             label[label > 1] = 1
-        return {'image': image, 'label': label}
+
+        mask = None
+        if self.use_attention:
+            mask = self.high_pass_filter(transforms.ToTensor()(Image.open(img_dir).convert('L')).unsqueeze(0))
+            mask = torch.nn.Softmax(dim=2)(mask).squeeze(0)
+
+        return {'image': image, 'label': label, 'mask': mask}
 
     def __len__(self):
         return self.length

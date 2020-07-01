@@ -1,7 +1,6 @@
 ### Libraries
 import torch.nn as nn, torch
-from utils.normalization_layer import Norm2D as Norm
-from efficientnet_pytorch import EfficientNet
+from efficientnet.model import EfficientNet
 
 
 class Net(nn.Module):
@@ -10,13 +9,13 @@ class Net(nn.Module):
         self.model = EfficientNet.from_pretrained('efficientnet-b0')
         # self.model = EfficientNet.from_name('efficientnet-b0')
         # 1280 is the number of neurons in last layer. is diff for diff. architecture
-        # self.dense_output = nn.Linear(2560, dic["n_classes"])
+        # self.dense_output = nn.Linear( 1792, dic["n_classes"])
         self.dense_output = nn.Linear(1280, 512)
         self.output = nn.Linear(512, dic["n_classes"])
         self.act = nn.LeakyReLU(0.2, inplace=True)
 
-    def forward(self, x):
-        feat = self.model.extract_features(x)
+    def forward(self, x, mask):
+        feat = self.model.extract_features(x, mask)
         feat = nn.functional.avg_pool2d(feat, feat.size()[2:]).reshape(-1, 1280)
         return self.output(self.act(self.dense_output(feat)))
 
