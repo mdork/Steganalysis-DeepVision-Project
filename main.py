@@ -31,11 +31,11 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
     for image_idx, file_dict in enumerate(data_iter):
 
         optimizer.zero_grad()
-        image = file_dict["image"].type(torch.FloatTensor).cuda()
+        input = file_dict["input"].type(torch.FloatTensor).cuda()
         label = file_dict["label"].type(torch.FloatTensor).cuda()
         mask = file_dict["mask"].type(torch.FloatTensor).cuda()
 
-        logits = network(image, mask)
+        logits = network(input, mask)
         loss   = loss_func(logits, label)
 
         loss.backward()
@@ -92,11 +92,11 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
     with torch.no_grad():
         for image_idx, file_dict in enumerate(data_iter):
 
-            image = file_dict["image"].type(torch.FloatTensor).cuda()
+            input = file_dict["input"].type(torch.FloatTensor).cuda()
             label = file_dict["label"].type(torch.FloatTensor).cuda()
             mask = file_dict["mask"].type(torch.FloatTensor).cuda()
 
-            logits   = network(image, mask)
+            logits   = network(input, mask)
             loss     = loss_func(logits, label)
 
             prediction = np.argmax(logits.cpu().data.numpy(), axis=1)

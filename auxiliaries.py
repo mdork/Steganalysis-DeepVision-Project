@@ -15,15 +15,16 @@ class dataset(torch.utils.data.Dataset):
         self.img_path = '/export/data/mdorkenw/data/alaska2/'
         self.mode = mode
         self.jpeg_comp = np.load(self.img_path + 'JPEG_compression.npy')
-        self.use_attention = opt.Training['attention_mask']
+        self.use_attention = opt.Network['attention_mask']
+        self.input_domain = opt.Network['input_domain']
 
-        if mode=='train':
+        if mode == 'train':
             self.length = int(opt.Training['train_size'])
             self.method = ['Cover', 'JUNIWARD', 'JMiPOD', 'UERD']
             self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
             self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
             self.offset = 0
-        elif mode=='evaluation':
+        elif mode == 'evaluation':
             self.length = int(opt.Training['evaluation_size'])
             self.method = ['Cover', 'JUNIWARD', 'JMiPOD', 'UERD']
             self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
@@ -41,13 +42,11 @@ class dataset(torch.utils.data.Dataset):
         self.augment_train = transforms.Compose([
              transforms.RandomVerticalFlip(p=0.5),
              transforms.RandomHorizontalFlip(p=0.5),
-             # transforms.RandomCrop(224),
              transforms.ToTensor(),
              transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
 
         self.augment_test  = transforms.Compose([
-            # transforms.RandomCrop(224),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -55,17 +54,23 @@ class dataset(torch.utils.data.Dataset):
         self.high_pass_filter = torch.nn.Conv2d(1, 1, 3, 1, 1, bias=False)
         kernel = torch.from_numpy(np.array([[0, -1 / 4, 0], [-1 / 4, 1, -1 / 4], [0, -1 / 4, 0]]))
         self.high_pass_filter.weight = torch.nn.Parameter(kernel.unsqueeze(0).unsqueeze(0).float())
+        # _ = self.high_pass_filter.cuda()
 
     def get_1hot_(self, label):
         hot1 = np.zeros(self.n_classes)
         hot1[label] = 1
         return hot1
 
-    def load_and_augment_(self, data_path):
+    def load_and_augment_RGB(self, data_path):
+        img = Image.open(data_path)
         if self.mode=='test' or self.mode == 'evaluation':
-            return self.augment_train(Image.open(data_path))
+            return self.augment_train(img)
         else:
-            return self.augment_test(Image.open(data_path))
+            return self.augment_test(img)
+
+    def load_and_augment_DCT(self, data_path):
+        dct = torch.from_numpy(np.load(data_path)).float().permute(2, 0, 1)
+        return dct
 
     def __getitem__(self, idx):
         if self.n_classes == 1 or self.mode == 'evaluation':
@@ -73,7 +78,12 @@ class dataset(torch.utils.data.Dataset):
         else:
             mode = np.random.randint(0, len(self.method))
         img_dir = self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg"
-        image = self.load_and_augment_(img_dir)
+        dct_dir = self.img_path + 'DCT/' + self.method[mode] + "/" + self.idx_dict[idx + self.offset][1:] + '2.npy'
+
+        if self.input_domain == 'RGB':
+            input = self.load_and_augment_RGB(img_dir)
+        elif self.input_domain == 'DCT':
+            input = self.load_and_augment_DCT(dct_dir)
 
         label = torch.tensor([mode])
         if self.n_classes == 12:
@@ -83,12 +93,12 @@ class dataset(torch.utils.data.Dataset):
         if self.n_classes == 1:
             label[label > 1] = 1
 
-        mask = None
+        mask = torch.zeros(1)
         if self.use_attention:
             mask = self.high_pass_filter(transforms.ToTensor()(Image.open(img_dir).convert('L')).unsqueeze(0))
-            mask = torch.nn.Softmax(dim=2)(mask).squeeze(0)
+            mask = torch.nn.Softmax(dim=2)(mask).squeeze(0).detach()
 
-        return {'image': image, 'label': label, 'mask': mask}
+        return {'input': input, 'label': label, 'mask': mask}
 
     def __len__(self):
         return self.length
