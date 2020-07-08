@@ -16,13 +16,14 @@ class Net(nn.Module):
         self.dense_output = nn.Linear(1280, 512)
         self.output = nn.Linear(512, dic["n_classes"])
         self.act = nn.LeakyReLU(0.2, inplace=True)
+        self.dropout = nn.Dropout(0.2)
 
     def forward(self, x, mask):
         if not self.attention:
             mask = None
         feat = self.model.extract_features(x, mask)
         feat = nn.functional.avg_pool2d(feat, feat.size()[2:]).reshape(-1, 1280)
-        return self.output(self.act(self.dense_output(feat)))
+        return self.output(self.dropout(self.act(self.dense_output(feat))))
 
 
 if __name__ == '__main__':

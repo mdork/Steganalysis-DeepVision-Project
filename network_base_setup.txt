@@ -5,17 +5,17 @@ attention_mask:     True
 input_domain:       'RGB'
 
 #Training
-n_epochs:           50
-lr:                 1e-3
+n_epochs:           25
+lr:                 2e-3
 bs:                 18
-weight_decay:       0.01
+weight_decay:       1e-5
 step_size:          30
 workers:            20
-savename:           'Efficientnet-b0_4classes_HIGHPASS'
+savename:           'Efficientnet-b0_4classes_RGB_ATTENTION'
 train_size:         70000
 evaluation_size:    5000
 test_size:          5000
-GPU:                [7]
+GPU:                [1]
 
 #Paths
 network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'

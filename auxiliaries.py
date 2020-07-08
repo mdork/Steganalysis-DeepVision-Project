@@ -69,8 +69,8 @@ class dataset(torch.utils.data.Dataset):
             return self.augment_test(img)
 
     def load_and_augment_DCT(self, data_path):
-        dct = torch.from_numpy(np.load(data_path)).float().permute(2, 0, 1)
-        return dct
+        dct = torch.from_numpy(1/(np.load(data_path)+1e-3)).float().permute(2, 0, 1)
+        return dct/dct.max()
 
     def __getitem__(self, idx):
         if self.n_classes == 1 or self.mode == 'evaluation':
@@ -78,7 +78,7 @@ class dataset(torch.utils.data.Dataset):
         else:
             mode = np.random.randint(0, len(self.method))
         img_dir = self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg"
-        dct_dir = self.img_path + 'DCT/' + self.method[mode] + "/" + self.idx_dict[idx + self.offset][1:] + '2.npy'
+        dct_dir = self.img_path + 'DCT/' + self.method[mode] + "/" + self.idx_dict[idx + self.offset][1:] + '_block.npy'
 
         if self.input_domain == 'RGB':
             input = self.load_and_augment_RGB(img_dir)
@@ -96,9 +96,9 @@ class dataset(torch.utils.data.Dataset):
         mask = torch.zeros(1)
         if self.use_attention:
             mask = self.high_pass_filter(transforms.ToTensor()(Image.open(img_dir).convert('L')).unsqueeze(0))
-            mask = torch.nn.Softmax(dim=2)(mask).squeeze(0).detach()
+            mask = torch.abs(mask).squeeze(0).detach()
 
-        return {'input': input, 'label': label, 'mask': mask}
+        return {'input': input, 'label': label, 'mask': mask/mask.max()}
 
     def __len__(self):
         return self.length
@@ -305,7 +305,7 @@ def auc(y_true, y_valid):
 
 ## Alterantive loss fom kaggle
 class LabelSmoothing(nn.Module):
-    def __init__(self, smoothing=0.05):
+    def __init__(self, dic, smoothing=0.1):
         super(LabelSmoothing, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
