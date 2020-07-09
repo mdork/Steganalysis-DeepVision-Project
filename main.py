@@ -5,6 +5,8 @@ from torchvision import transforms
 from tqdm import tqdm, trange
 import network as net
 import auxiliaries as aux
+import loss
+import dataloader as dloader
 import argparse
 from distutils.dir_util import copy_tree
 from datetime import datetime
@@ -169,19 +171,19 @@ def main(opt):
     print("Number of parameters in model", sum(p.numel() for p in network.parameters()))
 
     ###### Define Optimizer ######
-    loss_func   = aux.LabelSmoothing(opt.Network)
+    loss_func   = loss.LabelSmoothing(opt.Network)
     optimizer   = torch.optim.AdamW(network.parameters(), lr=opt.Training['lr'], weight_decay=opt.Training['weight_decay'])
     scheduler   = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1, min_lr=1e-7,
                                                              threshold=0.0001, threshold_mode='abs')
     ###### Create Dataloaders ######
-    train_dataset     = aux.dataset(opt, mode='train')
+    train_dataset     = dloader.dataset(opt, mode='train')
     train_data_loader = torch.utils.data.DataLoader(train_dataset, num_workers=opt.Training['workers'],
                                                     batch_size=opt.Training['bs'], shuffle=True)
-    val_dataset       = aux.dataset(opt, mode='evaluation')
+    val_dataset       = dloader.dataset(opt, mode='evaluation')
     val_data_loader   = torch.utils.data.DataLoader(val_dataset, num_workers=opt.Training['workers'],
                                                     batch_size=opt.Training['bs'], shuffle=False)
 
-    test_dataset       = aux.dataset(opt, mode='test')
+    test_dataset       = dloader.dataset(opt, mode='test')
     test_data_loader   = torch.utils.data.DataLoader(test_dataset, num_workers=opt.Training['workers'],
                                                      batch_size=opt.Training['bs'], shuffle=False)
 

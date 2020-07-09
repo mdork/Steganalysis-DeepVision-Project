@@ -7,10 +7,10 @@ input_domain:       'RGB'
 #Training
 n_epochs:           25
 lr:                 1e-3
-bs:                 8
+bs:                 18
 weight_decay:       0
 workers:            20
-savename:           'Efficientnet-b4_4classes_RGB_Smoothing'
+savename:           'Efficientnet-b0_4classes_RGB_Smoothing'
 train_size:         70000
 evaluation_size:    5000
 test_size:          5000
