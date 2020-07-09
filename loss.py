@@ -19,10 +19,10 @@ class Base_Loss(nn.Module):
             return self.loss(inp.reshape(-1), target.reshape(-1))
 
 
-## Alterantive loss fom kaggle
 class LabelSmoothing(nn.Module):
-    def __init__(self, dic, smoothing=0.05):
+    def __init__(self, dic):
         super(LabelSmoothing, self).__init__()
+        smoothing = dic['smoothing']
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
 

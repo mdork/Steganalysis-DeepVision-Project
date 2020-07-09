@@ -5,7 +5,7 @@ from torchvision import transforms
 from tqdm import tqdm, trange
 import network as net
 import auxiliaries as aux
-import loss
+import loss as Loss
 import dataloader as dloader
 import argparse
 from distutils.dir_util import copy_tree
@@ -38,20 +38,23 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
         mask = file_dict["mask"].type(torch.FloatTensor).cuda()
 
         logits = network(input, mask)
-        loss   = loss_func(logits, label)
-
+        loss = loss_func(logits, label)
         loss.backward()
         optimizer.step()
 
+        ## Compute Accuracy
         prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
         label = np.argmax(label.cpu().data.numpy(), axis=1)
         acc = (np.round(prediction == label)).mean()
 
-        logits = logits.detach().cpu()
-        logits_collect.append(logits)
+        ## compute per class accuracy
+        accs = aux.acc_per_class(prediction, label)
+
+        ## Collect logits to compute weighted AUC
+        logits_collect.append(logits.detach().cpu())
         labels_collect.append(label)
 
-        loss_dic = [loss.item(), acc]
+        loss_dic = [loss.item(), acc, *accs]
         loss_track.append(loss_dic)
 
         if image_idx % 20 == 0:
@@ -102,13 +105,18 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
             label    = torch.argmax(label, dim=1)
             loss     = loss_func(logits, label, 'eval')
 
+            ## compute per class accuracy
+            label = label.cpu().data.numpy()
             prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
-            acc = (np.round(prediction == label.cpu().data.numpy())).mean()
+            acc = (np.round(prediction == label)).mean()
+
+            ## compute per class accuracy
+            accs = aux.acc_per_class(prediction, label)
 
             logits_collect.append(logits.detach().cpu())
-            labels_collect.append(label.cpu().data.numpy())
+            labels_collect.append(label)
 
-            loss_dic = [loss.item(), acc]
+            loss_dic = [loss.item(), acc, *accs]
 
             loss_track.append(loss_dic)
             if image_idx%20 == 0:
@@ -171,7 +179,7 @@ def main(opt):
     print("Number of parameters in model", sum(p.numel() for p in network.parameters()))
 
     ###### Define Optimizer ######
-    loss_func   = loss.LabelSmoothing(opt.Network)
+    loss_func   = Loss.LabelSmoothing(opt.Training)
     optimizer   = torch.optim.AdamW(network.parameters(), lr=opt.Training['lr'], weight_decay=opt.Training['weight_decay'])
     scheduler   = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1, min_lr=1e-7,
                                                              threshold=0.0001, threshold_mode='abs')
@@ -226,7 +234,7 @@ def main(opt):
         f.write(save_str)
     pkl.dump(opt, open(opt.Paths['save_path'] + "/hypa.pkl", "wb"))
 
-    logging_keys = ["Loss", "ACC", "binary_acc", "AUC"]
+    logging_keys = ["Loss", "Acc Mean", "Acc Cover", "Acc JUNIWARD", "Acc JMiPOD", "Acc UERD", "binary_acc", "AUC"]
 
     loss_track_train = aux.loss_tracking(logging_keys)
     loss_track_test = aux.loss_tracking(logging_keys)

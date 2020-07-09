@@ -94,7 +94,6 @@ class CSVlogger():
 
 def write_submission(predictions, epoch, save_path):
 
-    breakpoint()
     paths = glob.glob('/export/data/mdorkenw/data/alaska2/Test/*.jpg')
     IDs = [i[-(4 + 4):] for i in paths]
     submission = pd.DataFrame({'ID': IDs, 'Label': list(predictions)})
@@ -145,7 +144,7 @@ class loss_tracking():
     def append_binary_acc(self, acc):
         self.dic['binary_acc'] = np.append(self.dic['binary_acc'], acc)
 
-    def get_iteration_mean(self, num=10):
+    def get_iteration_mean(self, num=20):
         mean = []
         for idx in range(len(self.keys)-2):
             if len(self.dic[self.keys[idx]]) < num:
@@ -199,3 +198,11 @@ def auc(y_true, y_valid):
         competition_metric += submetric
 
     return competition_metric / normalization
+
+
+def acc_per_class(pred, target):
+    accs = np.zeros(4)
+    for idx in range(len(accs)):
+        where = np.where(target == idx)[0]
+        accs[idx] = (pred[where] == idx).mean()
+    return accs
