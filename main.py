@@ -135,6 +135,33 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
     scheduler.step(loss_track.get_current_mean()[0])
 
 
+def tester(network, epoch, data_loader, save_path):
+
+    _ = network.eval()
+    logits_collect = []
+    data_iter = tqdm(data_loader, position=2)
+    inp_string = 'Epoch {} '.format(epoch)
+    data_iter.set_description(inp_string)
+
+    with torch.no_grad():
+        for image_idx, file_dict in enumerate(data_iter):
+
+            input = file_dict["input"].type(torch.FloatTensor).cuda()
+            mask = file_dict["mask"].type(torch.FloatTensor).cuda()
+
+            logits   = network(input, mask)
+            logits_collect.append(logits.detach().cpu())
+
+    logits = torch.cat(logits_collect, dim=0)
+
+    if logits.size(1) > 1:
+        pred = 1 - nn.functional.softmax(logits, dim=1).numpy()[:, 0]
+    else:
+        pred = logits.numpy().reshape(-1)
+
+    aux.write_submission(pred, epoch, save_path)
+
+
 def main(opt):
     """============================================"""
     ### Load Network
@@ -153,6 +180,10 @@ def main(opt):
     val_dataset       = aux.dataset(opt, mode='evaluation')
     val_data_loader   = torch.utils.data.DataLoader(val_dataset, num_workers=opt.Training['workers'],
                                                     batch_size=opt.Training['bs'], shuffle=False)
+
+    test_dataset       = aux.dataset(opt, mode='test')
+    test_data_loader   = torch.utils.data.DataLoader(test_dataset, num_workers=opt.Training['workers'],
+                                                     batch_size=opt.Training['bs'], shuffle=False)
 
     ###### Set Logging Files ######
     dt = datetime.now()
@@ -208,7 +239,7 @@ def main(opt):
     for epoch in epoch_iterator:
         epoch_time = time.time()
 
-        ###### Training ########
+        ##### Training ########
         epoch_iterator.set_description("Training with lr={}".format(np.round([group['lr'] for group in optimizer.param_groups][0], 6)))
         trainer(network, epoch, train_data_loader, loss_track_train, optimizer, loss_func)
 
@@ -223,6 +254,10 @@ def main(opt):
         # Best Validation Score
         current_auc = loss_track_test.get_current_mean()[-1]
         if current_auc > best_val_acc:
+            ###### Testing #########
+            epoch_iterator.set_description('Testing...')
+            tester(network, epoch, test_data_loader, opt.Paths['save_path'])
+            ## Save
             torch.save(save_dict, opt.Paths['save_path'] + '/checkpoint_best_val.pth.tar')
             best_val_acc = current_auc
 

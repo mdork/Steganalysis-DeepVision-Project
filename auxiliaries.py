@@ -31,12 +31,14 @@ class dataset(torch.utils.data.Dataset):
             self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
             self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
             self.offset = opt.Training['train_size']
-        else:
+        elif mode == 'test':
             self.length = int(opt.Training['test_size'])
             self.method = ['Test']
             self.data_path = glob.glob(self.img_path + "Test/*.jpg")
             self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
             self.offset = 0
+        else:
+            raise NotImplementedError('Specified mode is not implemented')
 
         self.n_classes = opt.Network['n_classes']
 
@@ -80,6 +82,7 @@ class dataset(torch.utils.data.Dataset):
             mode = np.random.choice([0, 1, 2, 3], p=[0.5, 0.5/3, 0.5/3, 0.5/3])
         else:
             mode = np.random.randint(0, len(self.method))
+
         img_dir = self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg"
         dct_dir = self.img_path + 'DCT/' + self.method[mode] + "/" + self.idx_dict[idx + self.offset][1:] + '_block.npy'
 
@@ -190,6 +193,16 @@ class CSVlogger():
         with open(self.logname,"a") as csv_file:
             writer = csv.writer(csv_file, delimiter=",")
             writer.writerow(inputs)
+
+
+def write_submission(predictions, epoch, save_path):
+
+    breakpoint()
+    paths = glob.glob('/export/data/mdorkenw/data/alaska2/Test/*.jpg')
+    IDs = [i[-(4 + 4):] for i in paths]
+    submission = pd.DataFrame({'ID': IDs, 'Label': list(predictions)})
+    filename = save_path + f'/Submission_epoch_{epoch}.csv'
+    submission.to_csv(filename, index=False)
 
 
 def progress_plotter(x, train_loss, train_metric, labels, savename='result.svg'):

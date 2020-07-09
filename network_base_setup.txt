@@ -1,6 +1,6 @@
 #Network
 n_classes:          4
-image_size:         512
+image_size:         256
 attention_mask:     False
 input_domain:       'RGB'
 
@@ -18,4 +18,4 @@ GPU:                [8]
 
 #Paths
 network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'
-save_path:                      '/export/data/mdorkenw/results/alaska/'
+save_path:                      '/export/data/mdorkenw/results/delete/'
