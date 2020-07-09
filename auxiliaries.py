@@ -17,6 +17,7 @@ class dataset(torch.utils.data.Dataset):
         self.jpeg_comp = np.load(self.img_path + 'JPEG_compression.npy')
         self.use_attention = opt.Network['attention_mask']
         self.input_domain = opt.Network['input_domain']
+        self.img_size = opt.Network['image_size']
 
         if mode == 'train':
             self.length = int(opt.Training['train_size'])
@@ -40,6 +41,7 @@ class dataset(torch.utils.data.Dataset):
         self.n_classes = opt.Network['n_classes']
 
         self.augment_train = transforms.Compose([
+             transforms.Resize(self.img_size),
              transforms.RandomVerticalFlip(p=0.5),
              transforms.RandomHorizontalFlip(p=0.5),
              transforms.ToTensor(),
@@ -47,6 +49,7 @@ class dataset(torch.utils.data.Dataset):
         ])
 
         self.augment_test  = transforms.Compose([
+            transforms.Resize(self.img_size),
             transforms.ToTensor(),
             transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
         ])
@@ -85,13 +88,14 @@ class dataset(torch.utils.data.Dataset):
         elif self.input_domain == 'DCT':
             input = self.load_and_augment_DCT(dct_dir)
 
-        label = torch.tensor([mode])
-        if self.n_classes == 12:
-            compression = self.jpeg_comp[idx]
-            label = torch.tensor([mode*3 + compression])
-
         if self.n_classes == 1:
-            label[label > 1] = 1
+            if mode > 1:
+                mode = 1
+
+        label = self.get_1hot_(mode)
+        # if self.n_classes == 12:
+        #     compression = self.jpeg_comp[idx]
+        #     label = torch.tensor([mode*3 + compression])
 
         mask = torch.zeros(1)
         if self.use_attention:
@@ -257,22 +261,6 @@ class loss_tracking():
         return self.hist
 
 
-class Base_Loss(nn.Module):
-    def __init__(self, dic):
-        super(Base_Loss, self).__init__()
-        self.n_classes = dic['n_classes']
-        if self.n_classes > 1:
-            self.loss    = nn.CrossEntropyLoss()
-        else:
-            self.loss    = nn.BCEWithLogitsLoss()
-
-    def forward(self, inp, target):
-        if self.n_classes > 1:
-            return self.loss(inp, target.long().reshape(-1))
-        else:
-            return self.loss(inp.reshape(-1), target.reshape(-1))
-
-
 def auc(y_true, y_valid):
     tpr_thresholds = [0.0, 0.4, 1.0]
     weights = [2, 1]
@@ -303,15 +291,31 @@ def auc(y_true, y_valid):
     return competition_metric / normalization
 
 
+class Base_Loss(nn.Module):
+    def __init__(self, dic):
+        super(Base_Loss, self).__init__()
+        self.n_classes = dic['n_classes']
+        if self.n_classes > 1:
+            self.loss    = nn.CrossEntropyLoss()
+        else:
+            self.loss    = nn.BCEWithLogitsLoss()
+
+    def forward(self, inp, target):
+        if self.n_classes > 1:
+            return self.loss(inp, target.long().reshape(-1))
+        else:
+            return self.loss(inp.reshape(-1), target.reshape(-1))
+
+
 ## Alterantive loss fom kaggle
 class LabelSmoothing(nn.Module):
-    def __init__(self, dic, smoothing=0.1):
+    def __init__(self, dic, smoothing=0.05):
         super(LabelSmoothing, self).__init__()
         self.confidence = 1.0 - smoothing
         self.smoothing = smoothing
 
-    def forward(self, x, target):
-        if self.training:
+    def forward(self, x, target, mode='train'):
+        if mode == 'train':
             x = x.float()
             target = target.float()
             logprobs = torch.nn.functional.log_softmax(x, dim=-1)
@@ -322,8 +326,7 @@ class LabelSmoothing(nn.Module):
             smooth_loss = -logprobs.mean(dim=-1)
 
             loss = self.confidence * nll_loss + self.smoothing * smooth_loss
-
             return loss.mean()
         else:
-            return torch.nn.functional.cross_entropy(x, target)
+            return torch.nn.functional.cross_entropy(x, target.long())
 
