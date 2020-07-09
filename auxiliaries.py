@@ -134,7 +134,7 @@ class loss_tracking():
         self.dic = {x: np.array([]) for x in self.loss_dic}
 
     def append(self, losses):
-        assert (len(self.keys)-2 == len(losses))
+        # assert (len(self.keys)-2 == len(losses))
         for idx in range(len(losses)):
             self.dic[self.keys[idx]] = np.append(self.dic[self.keys[idx]], losses[idx])
 
@@ -143,6 +143,10 @@ class loss_tracking():
 
     def append_binary_acc(self, acc):
         self.dic['binary_acc'] = np.append(self.dic['binary_acc'], acc)
+
+    def append_accs(self, acss):
+        for idx in range(len(acss)):
+            self.dic[self.keys[idx + 2]] = np.append(self.dic[self.keys[idx+2]], acss[idx])
 
     def get_iteration_mean(self, num=20):
         mean = []
@@ -200,9 +204,13 @@ def auc(y_true, y_valid):
     return competition_metric / normalization
 
 
-def acc_per_class(pred, target):
-    accs = np.zeros(4)
-    for idx in range(len(accs)):
-        where = np.where(target == idx)[0]
-        accs[idx] = (pred[where] == idx).mean()
+def acc_per_class(pred, target, dic):
+    n_classes = dic.Network['n_classes']
+    accs = np.zeros(n_classes)
+    for idx in range(n_classes):
+        index = np.where(target == idx)[0]
+        if len(index) > 0:
+            accs[idx] = (pred[index] == idx).mean()
+        else:
+            accs[idx] = 1
     return accs

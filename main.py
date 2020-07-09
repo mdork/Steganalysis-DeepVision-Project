@@ -21,7 +21,7 @@ torch.cuda.manual_seed(seed)
 torch.backends.cudnn.deterministic = True
 
 
-def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
+def trainer(network, dic, epoch, data_loader, loss_track, optimizer, loss_func, scheduler):
 
     _ = network.train()
     loss_track.reset()
@@ -47,14 +47,11 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
         label = np.argmax(label.cpu().data.numpy(), axis=1)
         acc = (np.round(prediction == label)).mean()
 
-        ## compute per class accuracy
-        accs = aux.acc_per_class(prediction, label)
-
         ## Collect logits to compute weighted AUC
         logits_collect.append(logits.detach().cpu())
         labels_collect.append(label)
 
-        loss_dic = [loss.item(), acc, *accs]
+        loss_dic = [loss.item(), acc]
         loss_track.append(loss_dic)
 
         if image_idx % 20 == 0:
@@ -66,8 +63,15 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
     logits = torch.cat(logits_collect, dim=0)
     label = np.concatenate(labels_collect, axis=0)
 
+    ## compute per class accuracy
+    prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
+    accs = aux.acc_per_class(prediction, label, dic)
+    loss_track.append_accs(accs)
+
     if logits.size(1) > 1:
         pred = 1 - nn.functional.softmax(logits, dim=1).numpy()[:, 0]
+    elif logits.size(1) > 5:
+        pred = 1 - np.sum(nn.functional.softmax(logits, dim=1).numpy()[:, :3], axis=1)
     else:
         pred = logits.numpy().reshape(-1)
 
@@ -82,9 +86,10 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
     ### Empty GPU cache
     torch.cuda.empty_cache()
     loss_track.get_mean()
+    scheduler.step(loss_track.get_current_mean()[0])
 
 
-def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
+def validator(network, dic, epoch, data_loader, loss_track, loss_func):
 
     _ = network.eval()
     loss_track.reset()
@@ -110,13 +115,10 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
             prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
             acc = (np.round(prediction == label)).mean()
 
-            ## compute per class accuracy
-            accs = aux.acc_per_class(prediction, label)
-
             logits_collect.append(logits.detach().cpu())
             labels_collect.append(label)
 
-            loss_dic = [loss.item(), acc, *accs]
+            loss_dic = [loss.item(), acc]
 
             loss_track.append(loss_dic)
             if image_idx%20 == 0:
@@ -126,8 +128,15 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
     logits = torch.cat(logits_collect, dim=0)
     label = np.concatenate(labels_collect, axis=0)
 
-    if logits.size(1) > 1:
+    ## compute per class accuracy
+    prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
+    accs = aux.acc_per_class(prediction, label, dic)
+    loss_track.append_accs(accs)
+
+    if 5 < logits.size(1) > 1:
         pred = 1 - nn.functional.softmax(logits, dim=1).numpy()[:, 0]
+    elif logits.size(1) > 5:
+        pred = 1 - np.sum(nn.functional.softmax(logits, dim=1).numpy()[:, :3], axis=1)
     else:
         pred = logits.numpy().reshape(-1)
 
@@ -142,7 +151,6 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
     ### Empty GPU cache
     torch.cuda.empty_cache()
     loss_track.get_mean()
-    scheduler.step(loss_track.get_current_mean()[0])
 
 
 def tester(network, epoch, data_loader, save_path):
@@ -234,7 +242,9 @@ def main(opt):
         f.write(save_str)
     pkl.dump(opt, open(opt.Paths['save_path'] + "/hypa.pkl", "wb"))
 
-    logging_keys = ["Loss", "Acc Mean", "Acc Cover", "Acc JUNIWARD", "Acc JMiPOD", "Acc UERD", "binary_acc", "AUC"]
+    ## Loss tracker is implented in such a way that the first 2 elements are added every iteration
+    Acc_classes = [f"Acc class {str(i)}" for i in range(opt.Network['n_classes'])]
+    logging_keys = ["Loss", "Acc Mean", *Acc_classes, "binary_acc", "AUC"]
 
     loss_track_train = aux.loss_tracking(logging_keys)
     loss_track_test = aux.loss_tracking(logging_keys)
@@ -251,11 +261,11 @@ def main(opt):
 
         ##### Training ########
         epoch_iterator.set_description("Training with lr={}".format(np.round([group['lr'] for group in optimizer.param_groups][0], 6)))
-        trainer(network, epoch, train_data_loader, loss_track_train, optimizer, loss_func)
+        trainer(network, opt, epoch, train_data_loader, loss_track_train, optimizer, loss_func, scheduler)
 
         ###### Validation #########
         epoch_iterator.set_description('Validating...')
-        validator(network, epoch, val_data_loader, loss_track_test, loss_func, scheduler)
+        validator(network, opt, epoch, val_data_loader, loss_track_test, loss_func)
 
         ###### SAVE CHECKPOINTS ########
         save_dict = {'epoch': epoch+1, 'state_dict': network.state_dict(),
