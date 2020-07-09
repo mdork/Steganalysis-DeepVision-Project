@@ -5,13 +5,14 @@ attention_mask:     False
 input_domain:       'RGB'
 
 #Training
-n_epochs:           25
+smoothing:          0.1
+n_epochs:           50
 lr:                 1e-3
 bs:                 18
 weight_decay:       0
 workers:            20
-savename:           'Efficientnet-b0_4classes_RGB_Smoothing'
-train_size:         70000
+savename:           'Efficientnet-b0_4classes_RGB_Smoothing_0.1'
+train_size:         7000
 evaluation_size:    5000
 test_size:          5000
 GPU:                [8]
