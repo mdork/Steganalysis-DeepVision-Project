@@ -1,22 +1,22 @@
 #Network
-n_classes:          4
-image_size:         256
+n_classes:          12
+image_size:         512
 attention_mask:     False
 input_domain:       'RGB'
 
 #Training
-smoothing:          0.1
+smoothing:          0.05
 n_epochs:           50
 lr:                 1e-3
 bs:                 18
 weight_decay:       0
 workers:            20
-savename:           'Efficientnet-b0_4classes_RGB_Smoothing_0.1'
-train_size:         7000
+savename:           'Efficientnet-b0_12classes_RGB_Smoothing_0.05'
+train_size:         70000
 evaluation_size:    5000
 test_size:          5000
-GPU:                [8]
+GPU:                [9]
 
 #Paths
 network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'
-save_path:                      '/export/data/mdorkenw/results/delete/'
+save_path:                      '/export/data/mdorkenw/results/alaska/'

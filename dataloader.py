@@ -91,10 +91,10 @@ class dataset(torch.utils.data.Dataset):
             if mode > 1:
                 mode = 1
 
+        if self.n_classes == 12:
+            mode = mode*3 + self.jpeg_comp[idx]
+
         label = self.get_1hot_(mode)
-        # if self.n_classes == 12:
-        #     compression = self.jpeg_comp[idx]
-        #     label = torch.tensor([mode*3 + compression])
 
         mask = torch.zeros(1)
         if self.use_attention:
