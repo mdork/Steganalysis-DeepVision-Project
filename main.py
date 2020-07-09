@@ -42,16 +42,17 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
         optimizer.step()
 
         prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
-        acc = (np.round(prediction==label.cpu().data.numpy())).mean()
+        label = np.argmax(label.cpu().data.numpy(), axis=1)
+        acc = (np.round(prediction == label)).mean()
 
         logits = logits.detach().cpu()
         logits_collect.append(logits)
-        labels_collect.append(label.cpu().numpy())
+        labels_collect.append(label)
 
         loss_dic = [loss.item(), acc]
         loss_track.append(loss_dic)
 
-        if image_idx%20 == 0:
+        if image_idx % 20 == 0:
             loss_mean, acc_mean, *_ = loss_track.get_iteration_mean()
             inp_string = 'Epoch {} || Loss: {} | Acc: {}'.format(epoch, np.round(loss_mean, 2),
                                                                  np.round(acc_mean, 3))
@@ -61,13 +62,12 @@ def trainer(network, epoch, data_loader, loss_track, optimizer, loss_func):
     label = np.concatenate(labels_collect, axis=0)
 
     if logits.size(1) > 1:
-        pred = 1-nn.Softmax(dim=1)(logits).numpy()[:, 0]
+        pred = 1 - nn.functional.softmax(logits, dim=1).numpy()[:, 0]
     else:
         pred = logits.numpy().reshape(-1)
 
-    label[label > 1] = 1
-    label = label.reshape(-1)
-    auc = aux.auc(label.astype(int), pred)
+    label = label.clip(min=0, max=1).astype(int)
+    auc = aux.auc(label, pred)
     loss_track.append_auc(auc)
     pred[pred > 0.5] = 1
     pred[pred <= 0.5] = 0
@@ -97,18 +97,19 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
             mask = file_dict["mask"].type(torch.FloatTensor).cuda()
 
             logits   = network(input, mask)
-            loss     = loss_func(logits, label)
+            label    = torch.argmax(label, dim=1)
+            loss     = loss_func(logits, label, 'eval')
 
             prediction = np.argmax(logits.cpu().data.numpy(), axis=1)
-            acc = (np.round(prediction==label.cpu().data.numpy())).mean()
+            acc = (np.round(prediction == label.cpu().data.numpy())).mean()
 
             logits_collect.append(logits.detach().cpu())
-            labels_collect.append(label.cpu().numpy())
+            labels_collect.append(label.cpu().data.numpy())
 
             loss_dic = [loss.item(), acc]
 
             loss_track.append(loss_dic)
-            if image_idx%20==0:
+            if image_idx%20 == 0:
                 inp_string = 'Epoch {} || Loss: {} | Acc: {}'.format(epoch, np.round(loss.item(), 2), acc)
                 data_iter.set_description(inp_string)
 
@@ -116,13 +117,12 @@ def validator(network, epoch, data_loader, loss_track, loss_func, scheduler):
     label = np.concatenate(labels_collect, axis=0)
 
     if logits.size(1) > 1:
-        pred = 1-nn.Softmax(dim=1)(logits).numpy()[:, 0]
+        pred = 1 - nn.functional.softmax(logits, dim=1).numpy()[:, 0]
     else:
         pred = logits.numpy().reshape(-1)
 
-    label[label>1] = 1
-    label = label.reshape(-1)
-    auc = aux.auc(label.astype(int), pred)
+    label = label.clip(min=0, max=1).astype(int)
+    auc = aux.auc(label, pred)
     loss_track.append_auc(auc)
     pred[pred > 0.5] = 1
     pred[pred <= 0.5] = 0
@@ -142,10 +142,10 @@ def main(opt):
     print("Number of parameters in model", sum(p.numel() for p in network.parameters()))
 
     ###### Define Optimizer ######
-    loss_func   = aux.Base_Loss(opt.Network)
+    loss_func   = aux.LabelSmoothing(opt.Network)
     optimizer   = torch.optim.AdamW(network.parameters(), lr=opt.Training['lr'], weight_decay=opt.Training['weight_decay'])
-    scheduler   = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1, min_lr=1e-7)
-
+    scheduler   = torch.optim.lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=1, min_lr=1e-7,
+                                                             threshold=0.0001, threshold_mode='abs')
     ###### Create Dataloaders ######
     train_dataset     = aux.dataset(opt, mode='train')
     train_data_loader = torch.utils.data.DataLoader(train_dataset, num_workers=opt.Training['workers'],
