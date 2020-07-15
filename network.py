@@ -1,4 +1,3 @@
-### Libraries
 import torch.nn as nn, torch
 from efficientnet.model import EfficientNet
 
@@ -39,7 +38,7 @@ if __name__ == '__main__':
                         help="Define config file")
     args = parser.parse_args()
     opt = aux.extract_setup_info(args.config)[0]
-    model = Network(opt.Network).cuda()
+    model = Net(opt.Network).cuda()
     print("Number of parameters in generator", sum(p.numel() for p in model.parameters()))
     dummy = torch.ones((2, 3, 512, 512)).cuda()
     breakpoint()
