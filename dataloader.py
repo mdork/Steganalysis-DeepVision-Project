@@ -14,25 +14,33 @@ class dataset(torch.utils.data.Dataset):
         self.use_attention = opt.Network['attention_mask']
         self.input_domain = opt.Network['input_domain']
         self.img_size = opt.Network['image_size']
+        self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
+        self.idxs = np.asarray([i[-(4 + 5):-4] for i in self.data_path])
+        
+        self.shuffle_mask = np.asarray([i for i in range(len(self.idxs))])
+        np.random.seed(seed)
+        np.random.shuffle(self.shuffle_mask)
+        self.idx_dict = self.idxs[self.shuffle_mask]
+        self.jpeg_comp = self.jpeg_comp[self.shuffle_mask]
+        
+        assert opt.Training['train_size'] + opt.Training['evaluation_size'] <= 75000
 
         if mode == 'train':
             self.length = int(opt.Training['train_size'])
             self.method = ['Cover', 'JUNIWARD', 'JMiPOD', 'UERD']
-            self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
-            self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
-            self.offset = 0
+            self.idx_dict = self.idx_dict[: self.length]
+            self.jpeg_comp = self.jpeg_comp[: self.length]
         elif mode == 'evaluation':
             self.length = int(opt.Training['evaluation_size'])
+            self.end = int(opt.Training['evaluation_size']) + int(opt.Training['train_size']) 
             self.method = ['Cover', 'JUNIWARD', 'JMiPOD', 'UERD']
-            self.data_path = glob.glob(self.img_path + "Cover/*.jpg")
-            self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
-            self.offset = opt.Training['train_size']
+            self.idx_dict = self.idx_dict[int(opt.Training['train_size']): self.end]
+            self.jpeg_comp = self.jpeg_comp[int(opt.Training['train_size']): self.end]
         elif mode == 'test':
             self.length = int(opt.Training['test_size'])
             self.method = ['Test']
             self.data_path = glob.glob(self.img_path + "Test/*.jpg")
             self.idx_dict = [i[-(4 + 5):-4] for i in self.data_path]
-            self.offset = 0
         else:
             raise NotImplementedError('Specified mode is not implemented')
 
@@ -70,17 +78,22 @@ class dataset(torch.utils.data.Dataset):
             return self.augment_test(img)
 
     def load_and_augment_DCT(self, data_path):
-        dct = torch.from_numpy(1/(np.load(data_path)+1e-3)).float().permute(2, 0, 1)
-        return dct/dct.max()
+        # dct = torch.from_numpy(1/(np.abs(np.load(data_path)) + 1)).float().permute(2, 0, 1)
+        q,T = 2,4
+        dct = np.load(data_path)
+        dct = np.clip(dct/q,-T ,T)
+    
+        return torch.from_numpy(dct).permute(2,0,1)
 
     def __getitem__(self, idx):
+        ## TODO TRAINING DIFFERENT DATA DISTRIBUTION
         if self.n_classes == 1 or self.mode == 'evaluation':
             mode = np.random.choice([0, 1, 2, 3], p=[0.5, 0.5/3, 0.5/3, 0.5/3])
-        else:
+        else:# self.mode=='test':
             mode = np.random.randint(0, len(self.method))
 
-        img_dir = self.img_path + self.method[mode] + "/" + self.idx_dict[idx + self.offset] + ".jpg"
-        dct_dir = self.img_path + 'DCT/' + self.method[mode] + "/" + self.idx_dict[idx + self.offset][1:] + '_block.npy'
+        img_dir = self.img_path + self.method[mode] + "/" + self.idx_dict[idx] + ".jpg"
+        dct_dir = self.img_path + 'DCT/' + self.method[mode] + "/" + self.idx_dict[idx][1:] + '_block.npy'
 
         if self.input_domain == 'RGB':
             input = self.load_and_augment_RGB(img_dir)

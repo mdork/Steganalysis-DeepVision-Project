@@ -97,7 +97,7 @@ def write_submission(predictions, epoch, save_path):
     paths = glob.glob('/export/data/mdorkenw/data/alaska2/Test/*.jpg')
     IDs = [i[-(4 + 4):] for i in paths]
     submission = pd.DataFrame({'ID': IDs, 'Label': list(predictions)})
-    filename = save_path + f'/Submission_epoch_{epoch}.csv'
+    filename = save_path + f'/submission/Submission_epoch_{epoch}.csv'
     submission.to_csv(filename, index=False)
 
 
@@ -150,8 +150,8 @@ class loss_tracking():
 
     def get_iteration_mean(self, num=20):
         mean = []
-        for idx in range(len(self.keys)-2):
-            if len(self.dic[self.keys[idx]]) < num:
+        for idx in range(2):
+            if len(self.dic[self.keys[idx]]) <= num:
                 mean.append(np.mean(self.dic[self.keys[idx]]))
             else:
                 mean.append(np.mean(self.dic[self.keys[idx]][-num:]))

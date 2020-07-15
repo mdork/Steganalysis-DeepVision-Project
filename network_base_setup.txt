@@ -9,13 +9,13 @@ smoothing:          0.05
 n_epochs:           50
 lr:                 1e-3
 bs:                 18
-weight_decay:       0
+weight_decay:       1e-5
 workers:            20
-savename:           'Efficientnet-b0_12classes_RGB_Smoothing_0.05'
+savename:           'Efficientnet-NFIX_12_5050'
 train_size:         70000
 evaluation_size:    5000
 test_size:          5000
-GPU:                [9]
+GPU:                [8]
 
 #Paths
 network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'
