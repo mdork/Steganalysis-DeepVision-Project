@@ -87,9 +87,9 @@ class dataset(torch.utils.data.Dataset):
 
     def __getitem__(self, idx):
         ## TODO TRAINING DIFFERENT DATA DISTRIBUTION
-        if self.n_classes == 1 or self.mode == 'evaluation':
-            mode = np.random.choice([0, 1, 2, 3], p=[0.5, 0.5/3, 0.5/3, 0.5/3])
-        else:# self.mode=='test':
+        # if self.n_classes == 1 or self.mode == 'evaluation':
+        mode = np.random.choice([0, 1, 2, 3], p=[0.5, 0.5/3, 0.5/3, 0.5/3])
+        if self.mode=='test':
             mode = np.random.randint(0, len(self.method))
 
         img_dir = self.img_path + self.method[mode] + "/" + self.idx_dict[idx] + ".jpg"
