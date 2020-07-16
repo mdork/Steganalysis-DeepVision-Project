@@ -28,7 +28,7 @@ Info about Steganalysis
 
     ```
 
-    cd deep_vision_project/
+    cd Steganalysis-DeepVision-Project/
 
     virtualenv venv
 
