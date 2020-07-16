@@ -1,2 +1,2 @@
-# ALASKA2
-ALASKA2 Image Steganalysis
+# Steganalysis - DeepVision Project
+Kaggle ALASKA2 Image Steganalysis
