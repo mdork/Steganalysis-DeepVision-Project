@@ -174,7 +174,7 @@ class loss_tracking():
         return self.hist
 
 
-def auc(y_true, y_valid):
+def auc_weighted(y_true, y_valid):
     tpr_thresholds = [0.0, 0.4, 1.0]
     weights = [2, 1]
 
@@ -202,6 +202,10 @@ def auc(y_true, y_valid):
         competition_metric += submetric
 
     return competition_metric / normalization
+
+
+def auc(y_true, y_valid):
+    return metrics.auc(y_true, y_valid)
 
 
 def acc_per_class(pred, target, dic):

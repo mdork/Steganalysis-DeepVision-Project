@@ -75,7 +75,7 @@ def trainer(network, dic, epoch, data_loader, loss_track, optimizer, loss_func, 
     else:
         pred = 1 - logits.numpy().reshape(-1)
     
-    auc = aux.auc(label, pred)
+    auc = aux.auc_weighted(label, pred)
     loss_track.append_auc(auc)
 
     ## Compute binary classification
@@ -145,7 +145,7 @@ def validator(network, dic, epoch, data_loader, loss_track, loss_func):
     else:
         pred = 1 - logits.numpy().reshape(-1)
     
-    auc = aux.auc(label, pred)
+    auc = aux.auc_weighted(label, pred)
     loss_track.append_auc(auc)
 
     ## Compute binary classification
@@ -178,10 +178,12 @@ def tester(network, epoch, data_loader, save_path):
 
     logits = torch.cat(logits_collect, dim=0)
 
-    if logits.size(1) > 1:
+    if 5 > logits.size(1) > 1:
         pred = 1 - nn.functional.softmax(logits, dim=1).numpy()[:, 0]
+    elif logits.size(1) > 5:
+        pred = 1 - np.sum(nn.functional.softmax(logits, dim=1).numpy()[:, :3], axis=1)
     else:
-        pred = logits.numpy().reshape(-1)
+        pred = 1 - logits.numpy().reshape(-1)
 
     aux.write_submission(pred, epoch, save_path)
 
@@ -204,7 +206,6 @@ def main(opt):
     val_dataset       = dloader.dataset(opt, mode='evaluation')
     val_data_loader   = torch.utils.data.DataLoader(val_dataset, num_workers=opt.Training['workers'],
                                                     batch_size=opt.Training['bs'], shuffle=False)
-
     test_dataset       = dloader.dataset(opt, mode='test')
     test_data_loader   = torch.utils.data.DataLoader(test_dataset, num_workers=opt.Training['workers'],
                                                      batch_size=opt.Training['bs'], shuffle=False)
@@ -261,7 +262,7 @@ def main(opt):
     full_log_test = aux.CSVlogger(save_path + "/log_per_epoch_test.csv", ["Epoch", "Time", "LR"] + logging_keys)
 
     epoch_iterator = tqdm(range(0, opt.Training['n_epochs']), ascii=True, position=1)
-    best_val_acc   = 0
+    best_val_auc   = 0
 
     for epoch in epoch_iterator:
         epoch_time = time.time()
@@ -276,14 +277,14 @@ def main(opt):
 
         ## Best Validation Score
         current_auc = loss_track_test.get_current_mean()[-1]
-        if current_auc > best_val_acc:
+        if current_auc > best_val_auc:
             ## Forward pass on test set + write submission csv file
             epoch_iterator.set_description('Testing...')
             tester(network, epoch, test_data_loader, opt.Paths['save_path'])
             ###### SAVE CHECKPOINTS ########
             save_dict = {'epoch': epoch+1, 'state_dict': network.state_dict(), 'optim_state_dict': optimizer.state_dict()}
             torch.save(save_dict, opt.Paths['save_path'] + '/checkpoint_best_val.pth.tar')
-            best_val_acc = current_auc
+            best_val_auc = current_auc
 
         ###### Logging Epoch Data ######]
         epoch_time =  time.time() - epoch_time

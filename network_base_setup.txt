@@ -1,21 +1,21 @@
 #Network
-n_classes:          12
+n_classes:          4
 image_size:         512
-attention_mask:     False
+attention_mask:     True
 input_domain:       'RGB'
 
 #Training
-smoothing:          0.05
-n_epochs:           50
-lr:                 1e-3
+smoothing:          0.1
+n_epochs:           100
+lr:                 5e-4
 bs:                 18
 weight_decay:       1e-5
 workers:            20
-savename:           'Efficientnet-NFIX_12_5050'
+savename:           'Efficientnet-CORRECT_SUBMISSION_45050_SMOOTHING0.1'
 train_size:         70000
 evaluation_size:    5000
 test_size:          5000
-GPU:                [8]
+GPU:                [2]
 
 #Paths
 network_variation_setup_file:   '/export/home/mdorkenw/code/ALASKA2/network_variation_setup.txt'
