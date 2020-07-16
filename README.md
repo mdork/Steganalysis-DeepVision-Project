@@ -1,7 +1,7 @@
 # Steganalysis - DeepVision Project
 Kaggle ALASKA2 Image Steganalysis
 
-Deep Vision project SS 2020 by S. Gruber and M. Dorkenwald
+Deep Vision project SS 2020 by S. Gruber and M. Dorkenwald \\
 Info about Steganalysis
 
 
@@ -59,8 +59,4 @@ Info about Steganalysis
     python ./src/download_data.py 
 
     ```
-
-
-    ```
-
 
