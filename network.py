@@ -11,8 +11,8 @@ class Net(nn.Module):
         else:
             self.model = EfficientNet.from_name('efficientnet-b0')
         # 1280 is the number of neurons in last layer. is diff for diff. architecture
-        # self.dense_output = nn.Linear(1792, 512)
         self.dense_output = nn.Linear(1280, 512)
+        # self.dense_output = nn.Linear(1280, 512)
         # self.dense_output = nn.Linear(1280, dic["n_classes"])
         self.output = nn.Linear(512, dic["n_classes"])
         self.act = nn.LeakyReLU(0.2, inplace=True)
