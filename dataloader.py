@@ -112,7 +112,7 @@ class dataset(torch.utils.data.Dataset):
         mask = torch.zeros(1)
         if self.use_attention:
             mask = self.high_pass_filter(transforms.ToTensor()(Image.open(img_dir).convert('L')).unsqueeze(0))
-            mask = torch.abs(mask).squeeze(0).detach()
+            mask = torch.abs(mask).detach().squeeze(0)
 
         return {'input': input, 'label': label, 'mask': mask/mask.max()}
 
