@@ -20,7 +20,7 @@ Info about Steganalysis
 
 
 
-- Create virtual environment
+- Create virtual conda environment
 
 
 
@@ -28,33 +28,19 @@ Info about Steganalysis
 
     cd Steganalysis-DeepVision-Project/
 
-    virtualenv venv
-
-    source venv/bin/activate
+    conda create -n myenv --file package-list.txt
 
     ```
 
 
 
-- Install required packages
+- Download data from kaggle 
 
 
 
     ```
 
-    pip install -r requirements.txt
-
-    ```
-
-
-
-- Download data
-
-
-
-    ```
-
-    python ./src/download_data.py 
+    kaggle competitions download -c alaska2-image-steganalysis 
 
     ```
 
