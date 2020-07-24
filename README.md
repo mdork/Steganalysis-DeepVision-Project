@@ -1,7 +1,9 @@
 # Steganalysis - DeepVision Project
 Deep Vision project SS 2020 by S. Gruber and M. Dorkenwald \
-Info about Steganalysis
-
+\
+\
+### Steganalysis 
+The task in steganalysis is to classify/detect if an image contains a hidden message or not. Typically used in espionage, thus important for law enforcement. Thus a low rate of false positives is desired. The problem itself is inherently difficult as cover image is not provided during inference. We use a diverse dataset from kaggle which was acquired with various cameras, jpeg compression and steganography algorithms. Here some examples:
 
 
 ### Setup
