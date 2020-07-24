@@ -44,3 +44,10 @@ Info about Steganalysis
 
     ```
 
+- Run python scripts after changing the directories to extract JPEG compression and DCT coefficients. 
+
+    ```
+    python scripts/JPEG_compression.py
+    python scripts/DCT_coefficients.py
+    
+    ```
