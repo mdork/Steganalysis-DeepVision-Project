@@ -4,6 +4,7 @@ Deep Vision project SS 2020 by S. Gruber and M. Dorkenwald
 ### Steganalysis 
 The goal in steganalysis is to classify/detect if an image contains a hidden message or not. Therefore it is typically used in espionage, thus important for law enforcement. The problem itself is inherently difficult as the cover image is not provided during inference. We use a diverse dataset from kaggle which was acquired with various cameras, jpeg compression and steganography algorithms. Here some examples:
 
+You can see a strong correlation between the difference image in the DCT space and in the RGB space. We achieved the best results with a pretrained efficientnet b0 (trained on 12 classes) with a weighted AUC score on the kaggle test set of 0.91. 
 
 ### Setup
 
