@@ -43,6 +43,5 @@ The goal in steganalysis is to classify/detect if an image contains a hidden mes
     ```
     python scripts/JPEG_compression.py
     python scripts/DCT_coefficients.py
-    
     ```
 - For training a model you only have to change the network_base_setup.txt file. The least thing you've to do is to change the data path.
