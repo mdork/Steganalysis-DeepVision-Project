@@ -25,7 +25,7 @@ The goal in steganalysis is to classify/detect if an image contains a hidden mes
 
     ```
     cd Steganalysis-DeepVision-Project/
-    conda create -n myenv --file package-list.txt
+    conda create -n myenv --file requirements.txt
     ```
 
 
