@@ -36,7 +36,6 @@ The goal in steganalysis is to classify/detect if an image contains a hidden mes
 
     ```
     kaggle competitions download -c alaska2-image-steganalysis 
-
     ```
 
 - Run python scripts after changing the directories to extract JPEG compression and DCT coefficients. 
