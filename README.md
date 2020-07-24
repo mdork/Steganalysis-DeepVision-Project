@@ -48,3 +48,4 @@ Info about Steganalysis
     python scripts/DCT_coefficients.py
     
     ```
+- For training a model you only have to change the network_base_setup.txt file. The least thing you've to do is to change the data path.
