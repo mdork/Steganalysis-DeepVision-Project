@@ -25,11 +25,8 @@ Info about Steganalysis
 
 
     ```
-
     cd Steganalysis-DeepVision-Project/
-
     conda create -n myenv --file package-list.txt
-
     ```
 
 
