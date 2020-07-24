@@ -14,9 +14,7 @@ The task in steganalysis is to classify/detect if an image contains a hidden mes
 
 
     ```
-
     git clone https://github.com/mdork/Steganalysis-DeepVision-Project.git
-
     ```
 
 
@@ -37,7 +35,6 @@ The task in steganalysis is to classify/detect if an image contains a hidden mes
 
 
     ```
-
     kaggle competitions download -c alaska2-image-steganalysis 
 
     ```
