@@ -1,2 +1,1 @@
-* linguist-vendored
-scripts/Visualization.ipynb linguist-language=false
+*.* linguist-language=Python
